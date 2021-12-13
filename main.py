@@ -2,7 +2,7 @@
     Title. 
 """
 import os
-import pyautogui
+import pyautogui as pag
 
 from time import sleep
 from Util.Image import *
@@ -14,11 +14,11 @@ PINBALL_NAME = "PINBALL.EXE"
 def runPinball():
     dirname = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
     proc = Process.start(dirname + PINBALL_PATH + PINBALL_NAME)
-
+    addr = WinAPI.getScoreAdderss()
     while True:
         sleep(1)
         title = proc.getWindowTitle()
-        print(f"name : {title}")
+        print(f"name : {title}, addr : {addr}")
         image = screenshot(proc)
         
 

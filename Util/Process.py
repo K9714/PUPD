@@ -3,6 +3,8 @@ import os
 
 from time import sleep
 
+PROCESS_KILLED = 65892
+
 def start(path):
     proc = Process(path)
     return proc
@@ -15,6 +17,7 @@ class Process:
         self.h_thread = None
         self.windowTitle = None
         self.hwnd = None
+        self.killed = False
         self.start()
         
 
@@ -26,12 +29,14 @@ class Process:
         os.startfile(self.fullpath)
         self.pid = WinAPI.findPID(self.name)
         assert self.pid, f"not found '{self.name}' process."
-        sleep(1)
+        sleep(2)
         self.load()
 
     def getWindowTitle(self):
         self.windowTitle = WinAPI.getWindowTitle(self.hwnd)
         return self.windowTitle
+
+
 
     def close(self):
         pass

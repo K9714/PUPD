@@ -1,10 +1,11 @@
-from PIL import ImageGrab
-import os
-import win32gui
+import Util.Win32API as WinAPI
 import pyautogui as pag
 
+from PIL import ImageGrab
+
 def screenshot(proc):
-    win32gui.SetForegroundWindow(proc.hwnd)
-    rect = win32gui.GetWindowRect(proc.hwnd)
+    WinAPI.getWindowHwnd(proc)
+    WinAPI.setForegroundWindow(proc.hwnd)
+    rect = WinAPI.getWindowRect(proc.hwnd)
     image = ImageGrab.grab(rect)
     return image

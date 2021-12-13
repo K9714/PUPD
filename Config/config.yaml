@@ -1,0 +1,11 @@
+HParams:
+  episodes: 50          # 에피소드 횟수(리플레이 횟수)
+
+  eps_start: 0.9        # 초기 랜덤 행동 확률
+  eps_end: 0.05         # 최종 랜덤 행동 확률
+  eps_decay: 200        # 랜덤 행동 확률 감소값
+
+  gamma: 0.8            # 미래의 경로로부터의 영향도
+
+  lr: 0.001             # Learning Rate
+  batch_size: 64        # Batch Size
