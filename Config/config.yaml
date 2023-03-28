@@ -1,11 +1,45 @@
 HParams:
-  episodes: 50          # 에피소드 횟수(리플레이 횟수)
+  qtable: false          # Q-Table 사용여부
+  episodes: 10500         # 에피소드 횟수(리플레이 횟수)
 
   eps_start: 0.9        # 초기 랜덤 행동 확률
   eps_end: 0.05         # 최종 랜덤 행동 확률
   eps_decay: 200        # 랜덤 행동 확률 감소값
 
+  alpha: 0.3            # 과거 기억 보존도
   gamma: 0.8            # 미래의 경로로부터의 영향도
 
   lr: 0.001             # Learning Rate
   batch_size: 64        # Batch Size
+
+  frame_skip: 3         # Frame skip
+
+Pinball:
+  path: 'Game/'
+  file_name: 'PINBALL.EXE'
+
+Env:
+  key_set: ['z', '/', 'space', 'x', '.']
+
+Training:
+  model_save_path: 'Pretrained/'
+  
+  resource_path: 'Resource/'
+  ball_images: ['ball.bmp', 'ball_big.bmp', 'ball_middle.bmp', 'ball_max.bmp']
+  dead_images: ['dead.bmp', 'resetting.bmp', 'foul.bmp']
+  plunger_image: 'plunger_full.bmp'
+
+  num_states: 9
+  num_actions: 7
+
+  # x-range 300 ~ 330
+  # y-range 30 ~ 380
+  start_point: [300, 330, 30, 380]
+
+  # x-range 70 ~ 250
+  # y-range 300 ~ 430
+  warn_point: [70, 250, 300, 430]
+
+  # coordinate normalized
+  max_x: 330
+  max_y: 430

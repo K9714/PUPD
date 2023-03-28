@@ -13,11 +13,11 @@ def getForegroundWindow():
     return wgui.GetForegroundWindow()
 
 def setForegroundWindow(hwnd):
-    print(hwnd)
     try:
         wgui.SetForegroundWindow(hwnd)
     except Exception as e:
-        print(e)
+        pass
+        #print(e)
     
 
 def getWindowTitle(hwnd):
@@ -25,6 +25,9 @@ def getWindowTitle(hwnd):
 
 def getWindowRect(hwnd):
     return wgui.GetWindowRect(hwnd)
+
+def getProcessModuleAddress(handle):
+    return wproc.EnumProcessModules(handle)[0]
 
 def findPID(proc_name):
     readline = os.popen('tasklist /FI "IMAGENAME eq '+ proc_name + '"').read()
@@ -37,9 +40,9 @@ def findPID(proc_name):
     mem += size
     return int(pid)
 
-def getScoreAdderss():
+def getScoreAdderss(file_name: str):
     print("PINBALL Start AOB Scan......")
-    readline = os.popen('wmempy -n PINBALL.EXE --aob "00 ? 00 88 5A 44 00 00 ? ? ? ? 00 00 00 00 00 00 00 00 B1 01" --separator " "').read()
+    readline = os.popen(f'wmempy -n {file_name} --aob "00 ? 00 88 5A 44 00 00 ? ? ? ? 00 00 00 00 00 00 00 00 B1 01" --separator " "').read()
     info = readline.split()
     addr = int(info[-1], 16) + 0x08
     print(addr)
