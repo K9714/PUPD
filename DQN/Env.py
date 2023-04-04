@@ -169,7 +169,7 @@ class Env():
         # states[2]
         # Check whether scores have changed
         old_score = self.score
-        self.score = 0#rwm.ReadProcessMemory(self.proc.handle, self.proc.score_addr)
+        self.score = rwm.ReadProcessMemory(self.proc.handle, self.proc.score_addr)
         self.states[2] = int(old_score != self.score)
 
         #-----------------------------------------
@@ -220,7 +220,9 @@ class Env():
         # if len(ret) == 1:
         #     self.game_end = True
 
-        frame_origin = frame_origin.crop((0, 0, 360, 360)).convert("L")
+        frame_origin = frame_origin.crop((0, 48, 360, 410+48))
+        #frame_origin.save("./crop.png")
+        frame_origin = frame_origin.convert("L")
         self.states = np.array(frame_origin)
 
         return frame
@@ -275,7 +277,6 @@ class Env():
         #if self.in_start and not old_plunger_full:
         #    if act == 3:
         #        reward += 1
-
         # if the plunger is continuously pulled at the starting point
         if self.in_start and old_plunger_full:
             if act == 6:
@@ -314,5 +315,6 @@ class Env():
         # if y-coordinates increase
         #if (old_y != 0 and self.y != 0) and (old_y > self.y) and not self.in_start:
         #    reward += 1
+
 
         return frame, self.states, reward, self.game_end
