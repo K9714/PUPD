@@ -46,7 +46,7 @@ def run():
     score_hist = []
     # Set Environment
     env = Env(BASE_DIR, config, proc)
-    IP = '127.0.0.1'#'192.168.0.13'
+    IP = '192.168.0.13'
     PORT = 5050
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -59,7 +59,7 @@ def run():
                 print(f"EPS : {e}")
                 start_t = time.time()
                 frame_skip_count = 0
-                while True:
+                while True: 
                     if env.in_start and not env.plunger_full:
                         action = 3
                         frame, next_state, reward, done = env.step(action)
@@ -73,7 +73,9 @@ def run():
                         action = int(data.decode())
 
                         frame, next_state, reward, done = env.step(action)
-                        print("Reward :", reward)
+                        if done:
+                            reward = -10
+                        print(f"{action}, {reward}")
                         send_reward = str(reward)
                         data = str(len(send_reward)).ljust(16)
                         sock.send(data.encode())

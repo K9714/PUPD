@@ -29,7 +29,7 @@ class CNNModel(nn.Module):
             # 1 x 20 x 20
         )
         self.fc_layer = nn.Sequential(
-            nn.Linear(1*20*20, 256),
+            nn.Linear(460, 256),#1*20*20, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),
@@ -39,7 +39,7 @@ class CNNModel(nn.Module):
         )
 
     def forward(self, x):
-        x = x.view((-1, 1, 360, 360))
+        x = x.view((-1, 1, 360, 410))
         x = self.cnn_layer(x)
         x = x.view(x.size(0), -1)
         x = self.fc_layer(x)

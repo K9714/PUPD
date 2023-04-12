@@ -6,7 +6,9 @@ import yaml
 import numpy as np
 from DQN.Model.FC import FC
 from DQN.Model.CNN import CNNModel
+from DQN.Model.DDQN import DDQN
 from DQN.Model.Agent import Agent
+from PIL import Image
 
 import socket
 from _thread import *
@@ -17,6 +19,7 @@ CONFIG_PATH = "Config/"
 CONFIG_NAME = "config.yaml"
 
 config = None
+lock = allocate_lock()
 
 def load_config():
     global config
@@ -27,15 +30,17 @@ def load_config():
 load_config()
 
 # 통신 정보 설정
-IP = 'localhost' # 192.168.0.13
+IP = '0.0.0.0' # 192.168.0.13
 PORT = 5050
 SIZE = 2048
 ADDR = (IP, PORT)
 
 device = torch.device("cpu" if not torch.cuda.is_available() else "cuda")
-model = CNNModel(config['Training']['num_states']).to(device)
-optimizer = optim.Adam(model.parameters(), config['HParams']['lr'])
-agent = Agent(config['HParams'], device, models=[model], optimizers=[optimizer])
+# main_model = DuelingCNN(config['Training']['num_states']).to(device)
+# target_model = DuelingCNN(config['Training']['num_states']).to(device)
+# optimizer = optim.Adam(model.parameters(), config['HParams']['lr'])
+agent = DDQN(config, device)
+#agent.load("./Data/", "230407_DDDQN_eps_1340.pt")
 
 client_sockets = []
 
@@ -53,20 +58,35 @@ def recvall(sock, count):
 
 def client_thread(sock, addr):
     print(f">> Connected by : {addr[0]}:{addr[1]}")
-    frame_skip_count = 0
+    frame_stack = []
+    next_frame_stack = []
     frame_skip = int(config['HParams']['frame_skip'])
+    step = 0
+    memorize = False
     while True:
         try:
             length = recvall(sock, 16)
             if not length:
                 break
             data = recvall(sock, int(length.decode()))
-            state = np.frombuffer(data, dtype='uint8')
-            state = torch.tensor(np.array([state]), dtype=torch.float).to(device)
-            action, ret, idx = agent.action(state)
+            stack = np.reshape(np.frombuffer(data, dtype='uint8'), (41, 40))
+            stack = stack.tolist()
+
+            for i in range(step % frame_skip, len(frame_stack), frame_skip):
+                frame_stack[i].append(stack)
+            frame_stack.append([stack])
+
+            if len(frame_stack[0]) == frame_skip:
+                state = np.array([frame_stack.pop(0)])
+                state = torch.tensor(state, dtype=torch.float).to(device)
+                action = agent.action(state)
+                memorize = True
+            else:
+                action = 4
+                memorize = False
             
-            send_action = str(action.item())
-            data = str(len(action)).ljust(16)
+            send_action = str(action)
+            data = str(len(send_action)).ljust(16)
             sock.send(data.encode())
             sock.send(send_action.encode())
 
@@ -76,14 +96,21 @@ def client_thread(sock, addr):
 
             length = recvall(sock, 16)
             data = recvall(sock, int(length.decode()))
-            next_state = np.frombuffer(data, dtype='uint8')
+            next_stack = np.reshape(np.frombuffer(data, dtype='uint8'), (41, 40))
+            next_stack = next_stack.tolist()
 
-            frame_skip_count += 1
-            if frame_skip_count == frame_skip:
+            for i in range(step % frame_skip, len(next_frame_stack), frame_skip):
+                next_frame_stack[i].append(next_stack)
+            next_frame_stack.append([next_stack])
+
+            if memorize:
+                next_state = next_frame_stack.pop(0)
                 agent.memorize(0, state, action, reward, next_state, 0)
+                lock.acquire()
                 agent.learn(0)
-                frame_skip_count = 0
-            
+                lock.release()
+                step -= 1
+            step += 1
 
         except ConnectionResetError as e:
             break

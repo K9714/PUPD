@@ -21,7 +21,7 @@ class Process:
         self.killed = False
         self.start()
         # Get Pinball score memory address
-        self.score_addr = 0#WinAPI.getScoreAdderss(conf_pinball['file_name'])
+        self.score_addr = WinAPI.getScoreAdderss(conf_pinball['file_name'])
         
     def load(self):
         self.hwnd = WinAPI.getForegroundWindow()

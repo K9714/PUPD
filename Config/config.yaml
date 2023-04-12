@@ -4,7 +4,7 @@ HParams:
 
   eps_start: 0.9        # 초기 랜덤 행동 확률
   eps_end: 0.05         # 최종 랜덤 행동 확률
-  eps_decay: 200        # 랜덤 행동 확률 감소값
+  eps_decay: 1000       # 랜덤 행동 확률 감소값
 
   alpha: 0.3            # 과거 기억 보존도
   gamma: 0.8            # 미래의 경로로부터의 영향도
@@ -12,7 +12,8 @@ HParams:
   lr: 0.001             # Learning Rate
   batch_size: 64        # Batch Size
 
-  frame_skip: 3         # Frame skip
+  frame_skip: 4         # Frame skip
+  ddqn_update_step: 1000 # Double DQN Update Steps
 
 Pinball:
   path: 'Game/'
@@ -28,9 +29,10 @@ Training:
   ball_images: ['ball.bmp', 'ball_big.bmp', 'ball_middle.bmp', 'ball_max.bmp']
   dead_images: ['dead.bmp', 'resetting.bmp', 'foul.bmp']
   plunger_image: 'plunger_full.bmp'
+  mask_image: 'mask.png'
 
   num_states: 9
-  num_actions: 7
+  num_actions: 5
 
   # x-range 300 ~ 330
   # y-range 30 ~ 380

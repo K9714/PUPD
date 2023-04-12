@@ -6,7 +6,7 @@ from time import sleep
 from Util.Memory import rwm
 from Util.Image import screenshot, imageSearchExByArray
 from Util.Process import Process
-from PIL import Image
+from PIL import Image, ImageDraw
 
 class Env():
     def __init__(self, base_path: str, conf: dict, proc: Process):
@@ -39,6 +39,7 @@ class Env():
         ball_images = conf_training['ball_images']
         dead_images = conf_training['dead_images']
         plunger_image = conf_training['plunger_image']
+        mask_image = conf_training['mask_image']
 
         self.ball_images = []
         self.dead_images = []
@@ -58,6 +59,9 @@ class Env():
         temp = np.array(img)
         self.plunger_image = temp
 
+        img = Image.open(self.base_path + resource_path + mask_image).convert('RGBA')
+        self.mask_image = img
+
     def _load_memory_address(self):
         base = self.proc.getProcessModuleAddress()
         print(f"base : {hex(base)}")
@@ -74,6 +78,8 @@ class Env():
         self.warn_point = conf_training['warn_point']
         self.in_start = False
         self.in_warn = False
+        self.in_special = False
+        self.in_negative = False
 
     def _load_input_output(self, conf_training: dict):
         self.num_states = conf_training['num_states']
@@ -105,13 +111,13 @@ class Env():
 
     def _set_keys(self, key_state: list):
         for i, state in enumerate(key_state):
-            if self.key_state[i] != state and i < 3 or i > 4:
+            if self.key_state[i] != state and i == 2:
                 self.key_state[i] = state
                 if state == 0:
                     pag.keyUp(self.key_set[i])
                 elif state == 1:
                     pag.keyDown(self.key_set[i])
-            elif state == 1 and (i == 3 or i == 4):
+            elif i != 2 and state == 1:
                 pag.keyDown(self.key_set[i])
                 sleep(0.05)
                 pag.keyUp(self.key_set[i])
@@ -128,10 +134,10 @@ class Env():
             self._set_keys([1, 1, 0, 0, 0])
         elif act == 3:
             self._set_keys([0, 0, 1, 0, 0])
-        elif act == 4:
-            self._set_keys([0, 0, 0, 1, 0])
-        elif act == 5:
-            self._set_keys([0, 0, 0, 0, 1])
+        #elif act == 4:
+        #    self._set_keys([0, 0, 0, 1, 0])
+        #elif act == 5:
+        #    self._set_keys([0, 0, 0, 0, 1])
         else:
             self._set_keys([0, 0, 0, 0, 0])
 
@@ -220,10 +226,27 @@ class Env():
         # if len(ret) == 1:
         #     self.game_end = True
 
-        frame_origin = frame_origin.crop((0, 48, 360, 410+48))
-        #frame_origin.save("./crop.png")
-        frame_origin = frame_origin.convert("L")
-        self.states = np.array(frame_origin)
+        frame_origin = frame_origin.crop((0, 48, 360, 410+48)).convert('RGBA')
+        frame_origin = frame_origin.resize((40, 41))#(84, 95))
+        mask_image = Image.alpha_composite(frame_origin, self.mask_image)
+        px = mask_image.load()
+        x = min(int((self.x + 9) / 9), 39)
+        y = min(int(self.y / 10), 40)
+        if px[x, y] == (0, 255, 0, 255):
+            self.in_special = True
+        else:
+            self.in_special = False
+        if px[x, y] == (255, 0, 255, 255):
+            self.in_negative = True
+        else:
+            self.in_negative = False
+        draw = ImageDraw.Draw(mask_image, 'RGBA')
+        #draw.rectangle([(9+self.x, self.y), (9+self.x+9, self.y+10)], fill="red")
+        draw.rectangle([(x, y), (x, y)], fill="white")
+        #mask_image.save("./crop.png")
+        mask_image = mask_image.convert("L")
+        #mask_image.save("./crop_gray.png")
+        self.states = np.array(mask_image)
 
         return frame
 
@@ -251,6 +274,8 @@ class Env():
         old_y = self.y
         old_score = self.score
         old_plunger_full = self.plunger_full
+        old_in_special = self.in_special
+        old_in_negative = self.in_negative
 
         # frame skip
         #if old_x != 0 and old_y != 0:
@@ -266,7 +291,7 @@ class Env():
 
         # reward
         reward = 0
-
+        """
         # if ball continue to stay at the starting point
         #if old_in_start == True and self.in_start == False:
         #    reward += 1
@@ -303,14 +328,24 @@ class Env():
             #     reward -= 1
             # else:
             #     reward += 1
-
+        """
+        reward = -1
         # if the coordinates are consistently the same
         if (self.x != 0 and self.y != 0) and old_x == self.x and old_y == self.y:
             reward -= 1
-
         # if the score is changed
         if old_score != self.score:
             reward += 1
+        if old_in_warn == True and self.in_warn == False:
+            reward += 10
+        elif old_in_warn == True and self.in_warn == True:
+            reward -= 1
+        if old_in_negative == False and self.in_negative == True:
+            reward -= 10
+        if self.in_special == True:
+            reward += 10
+        if old_in_warn and (act == 3):
+            reward -= 1
 
         # if y-coordinates increase
         #if (old_y != 0 and self.y != 0) and (old_y > self.y) and not self.in_start:
