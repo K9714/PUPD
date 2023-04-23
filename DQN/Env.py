@@ -5,6 +5,7 @@ from DQN.Model.Agent import Agent
 from time import sleep
 from Util.Memory import rwm
 from Util.Image import screenshot, imageSearchExByArray
+from Util.ImageScaler import *
 from Util.Process import Process
 from PIL import Image, ImageDraw
 
@@ -225,29 +226,10 @@ class Env():
         # ret = imageSearchExByArray(frame, self.dead_images[1])
         # if len(ret) == 1:
         #     self.game_end = True
-
-        frame_origin = frame_origin.crop((0, 48, 360, 410+48)).convert('RGBA')
-        frame_origin = frame_origin.resize((40, 41))#(84, 95))
-        mask_image = Image.alpha_composite(frame_origin, self.mask_image)
-        px = mask_image.load()
-        x = min(int((self.x + 9) / 9), 39)
-        y = min(int(self.y / 10), 40)
-        if px[x, y] == (0, 255, 0, 255):
-            self.in_special = True
-        else:
-            self.in_special = False
-        if px[x, y] == (255, 0, 255, 255):
-            self.in_negative = True
-        else:
-            self.in_negative = False
-        draw = ImageDraw.Draw(mask_image, 'RGBA')
-        #draw.rectangle([(9+self.x, self.y), (9+self.x+9, self.y+10)], fill="red")
-        draw.rectangle([(x, y), (x, y)], fill="white")
-        #mask_image.save("./crop.png")
-        mask_image = mask_image.convert("L")
-        #mask_image.save("./crop_gray.png")
-        self.states = np.array(mask_image)
-
+        crop_image = get_crop_image(frame_origin)
+        gray_image = get_gray_scale_image(crop_image)
+        resize_image = get_resize_image(gray_image)
+        self.states = np.array(resize_image) / 255.0
         return frame
 
     def reset(self):
@@ -329,7 +311,7 @@ class Env():
             # else:
             #     reward += 1
         """
-        reward = -1
+        """
         # if the coordinates are consistently the same
         if (self.x != 0 and self.y != 0) and old_x == self.x and old_y == self.y:
             reward -= 1
@@ -350,6 +332,15 @@ class Env():
         # if y-coordinates increase
         #if (old_y != 0 and self.y != 0) and (old_y > self.y) and not self.in_start:
         #    reward += 1
+        """
 
+        # 점수가 같으면 작게 벌줌
+        if old_score == self.score:
+            reward = -1
 
-        return frame, self.states, reward, self.game_end
+        # 점수가 변동되면 변동량의 0.001 배수만큼 보상
+        if old_score != self.score and self.y < 390:
+            reward = 0.001 * (self.score - old_score)
+        
+
+        return self.states, reward, self.game_end
