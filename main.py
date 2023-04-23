@@ -12,6 +12,13 @@ from Util.Image import *
 from Util.Memory import rwm
 import Util.Process as Process
 
+from torchsummary import summary
+from DQN.Model.FC import FC
+from DQN.Model.CNN import CNN
+from DQN.Model.DDQN import DDQN, DuelingCNN
+from DQN.FrameProcessor import FrameProcessor
+import torch.nn as nn
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/") + "/"
 
 CONFIG_PATH = "Config/"
@@ -38,34 +45,15 @@ def init():
     # Start Pinball process
     proc = Process.start(BASE_DIR + config['Pinball']['path'] + config['Pinball']['file_name'], config['Pinball'])
 
-
-class Animation():
-    def __init__(self, data = None):
-        self.hist = [0]
-        self.data = data
-
-    def animate(self, i):
-        plt.cla()
-        plt.plot(self.data.hist)
-
-def animate_init(ani):
-    graph = FuncAnimation(plt.gcf(), ani.animate, interval=1000)
-    plt.tight_layout()
-    plt.show()
-
-from DQN.Model.FC import FC
-from DQN.Model.CNN import CNN
-
-runtime_hist = []
-
 def run():
-    global config, proc, handle, score_addr, runtime_hist
+    global config, proc, handle, score_addr
 
     # Set hyper parameters
     hp = config['HParams']
     eps = hp['episodes']
     lr = hp['lr']
     frame_skip = int(hp['frame_skip'])
+    save_eps = config['Training']['save_eps']
 
     # Set score history
     score_hist = []
@@ -73,54 +61,57 @@ def run():
     env = Env(BASE_DIR, config, proc)
     # Set Agent
     device = torch.device("cpu" if not torch.cuda.is_available() else "cuda")
-    agent = CNN(config, device)
-    
+    agent = DDQN(config, device)
 
-    data = Animation()
-    ani = Animation(data)
-    plt_proc = multiprocessing.Process(target=animate_init, args=(ani,))
-    plt_proc.start()
+    model = DuelingCNN(config['Training']['num_actions'])
+    summary(model, input_size=(4, 180, 180))
+
+    stack = FrameProcessor(frame_skip)
 
     for e in range(1, eps + 1):
         steps = 0
-        state = env.reset()
+        frame = env.reset()
         print(f"EPS : {e}")
         start_t = time.time()
-        frame_skip_count = 0
+        memorize = False
         while True:
-            state = torch.tensor([state], dtype=torch.float).to(device)
-            action, ret, idx = agent.action(state)
             if env.in_start and not env.plunger_full:
-                action = torch.tensor([[3]]).to(device)
+                action = 3
+                next_frame, reward, done = env.step(action)
+            else:
+                stack.frame_append(frame)
+                if len(stack) < frame_skip:
+                    action = 0
+                else:
+                    state = torch.tensor(np.array([stack.frame_pop()]), dtype=torch.float).to(device)
+                    action = agent.action(state)
+                    memorize = True
+
+                next_frame, reward, done = env.step(action)
+                stack.next_frame_append(next_frame)
+                # 게임이 끝났을 경우 마이너스 보상주기 
+                if done:
+                    reward = -10
                 
+                if memorize:
+                    next_state = stack.next_frame_pop()
+                    agent.memorize(state, action, reward, next_state, done) # 경험(에피소드) 기억
+                    loss = agent.learn()
+                    print(f"Action : {action}, Reward : {reward}, Loss : {round(loss, 3)}")
 
-            print(action.tolist(), ret, end=" ")
-            frame, next_state, reward, done = env.step(action.tolist()[0][0])
-            print(reward)
-
-            # 게임이 끝났을 경우 마이너스 보상주기 
-            if done:
-                reward = -5
-            if not env.in_start:
-                frame_skip_count += 1
-                if frame_skip_count == frame_skip or done:
-                    agent.memorize(frame, state, action, reward, next_state, idx) # 경험(에피소드) 기억
-                    agent.learn(idx)
-                    frame_skip_count = 0
-
-            state = next_state
-            steps += 1 
+            frame = next_frame
+            steps += 1
 
             if done:
                 end_t = time.time()
                 runtime = end_t - start_t
                 score = rwm.ReadProcessMemory(env.proc.handle, env.proc.score_addr)
                 print("에피소드:{0} 점수: {1}, 수행시간 : {2}".format(e, score, runtime))
-                score_hist.append([score, runtime]) #score history에 점수 저장
-                runtime_hist.append(runtime)
-                if (e - 1) % 100 == 0:
-                    torch.save({'score_hist': score_hist}, "./Data/score_history.pt")
-                    agent.save("./Data/", f"eps_{e}.pt")
+                score_hist.append((score, runtime)) #score history에 점수 저장
+                if (e - 1) % save_eps == 0:
+                    name = type(agent).__name__
+                    torch.save({'score_hist': score_hist}, f"./Data/{name}_score_history_eps_{e}.pt")
+                    agent.save("./Data", f"{name}_params_eps_{e}.pt")
                 break
 
 if __name__ == "__main__":
