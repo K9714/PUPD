@@ -24,6 +24,7 @@ def get_flipper_area(src: Image):
     gimg = cv2.cvtColor(img_result, cv2.COLOR_BGR2GRAY)
     contours, _ = cv2.findContours(gimg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     moments = []
+    ret_contours = []
     for contour in contours:
         if len(contour) < 30:
             continue
@@ -31,6 +32,7 @@ def get_flipper_area(src: Image):
         cX = int(M['m10'] / M['m00']) + 126
         cY = int(M['m01'] / M['m00']) + 344
         moments.append((cX, cY))
+        ret_contours.append(contour)
         cimg = cv2.drawContours(cimg, [contour], -1, (0, 0, 255), 2)
     rgb = cv2.cvtColor(cimg, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(rgb)
@@ -39,4 +41,4 @@ def get_flipper_area(src: Image):
     ret.paste(src, (0, 0))
     ret.paste(img, (126, 344))
     
-    return ret, moments
+    return ret, moments, ret_contours
