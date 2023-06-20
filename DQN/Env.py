@@ -1,5 +1,6 @@
 import numpy as np
 import pyautogui as pag
+import time
 
 from DQN.Model.Agent import Agent
 from time import sleep
@@ -14,7 +15,11 @@ class Env():
         self.base_path = base_path
         self.proc = proc
         self.score = 0
+        self.local_min_check = False
+        self.local_min_time = 0
+        self.dead_reward = False
         pag.PAUSE = 0
+        pag.FAILSAFE = False
         self._setup(conf)
 
     # Private Methods
@@ -73,6 +78,7 @@ class Env():
         self.x_pos_addr = ptr2
         self.y_pos_addr = ptr2 + 0x04
         print(f"x_pos_addr : {hex(self.x_pos_addr)}\ny_pos_addr : {hex(self.y_pos_addr)}")
+        print(f"ADDR - PTR1 : {hex(self.proc.score_addr - ptr1)}")
 
     def _load_ranges(self, conf_training: dict):
         self.start_point = conf_training['start_point']
@@ -102,6 +108,7 @@ class Env():
         self.in_start = False
         if self._is_in_range(x, self.start_point[:2]) and self._is_in_range(y, self.start_point[2:]):
             self.in_start = True
+            self.dead_reward = False
         return self.in_start
 
     def _in_warn_point(self, x: int, y: int) -> bool:
@@ -112,47 +119,63 @@ class Env():
 
     def _set_keys(self, key_state: list):
         for i, state in enumerate(key_state):
-            if self.key_state[i] != state and i == 2:
+            if self.key_state[i] != state and i != 3:
                 self.key_state[i] = state
                 if state == 0:
                     pag.keyUp(self.key_set[i])
                 elif state == 1:
                     pag.keyDown(self.key_set[i])
-            elif i != 2 and state == 1:
+            elif i == 3 and state == 1:
                 pag.keyDown(self.key_set[i])
                 sleep(0.05)
                 pag.keyUp(self.key_set[i])
+            #elif i != 2 and state == 1:
+            #    pag.keyDown(self.key_set[i])
+            #    sleep(0.05)
+            #    pag.keyUp(self.key_set[i])
                     
 
     # Public Methods
     def action(self, act: int):
         act = int(act)
-        if act == 0:
-            self._set_keys([1, 0, 0, 0, 0])
-        elif act == 1:
-            self._set_keys([0, 1, 0, 0, 0])
+        if act == 1:
+            self._set_keys([1, -1, -1, -1, -1])
         elif act == 2:
-            self._set_keys([1, 1, 0, 0, 0])
+            self._set_keys([0, -1, -1, -1, -1])
         elif act == 3:
-            self._set_keys([0, 0, 1, 0, 0])
+            self._set_keys([-1, 1, -1, -1, -1])
+        elif act == 4:
+            self._set_keys([-1, 0, -1, -1, -1])
+        elif act == 5:
+            self._set_keys([-1, -1, -1, 1, -1])
+
+        elif act == 9:
+            self._set_keys([-1, -1, 1, -1, -1])
+        elif act == 10:
+            self._set_keys([-1, -1, 0, -1, -1])
+        else:
+            self._set_keys([0, 0, 0, 0, 0])
+        #if act == 0:
+        #    self._set_keys([1, 0, 0, 0, 0])
+        #elif act == 1:
+        #    self._set_keys([0, 1, 0, 0, 0])
+        #elif act == 2:
+        #    self._set_keys([1, 1, 0, 0, 0])
+        #elif act == 3:
+        #    self._set_keys([0, 0, 1, 0, 0])
         #elif act == 4:
         #    self._set_keys([0, 0, 0, 1, 0])
         #elif act == 5:
         #    self._set_keys([0, 0, 0, 0, 1])
-        else:
-            self._set_keys([0, 0, 0, 0, 0])
+        #else:
+        #    self._set_keys([0, 0, 0, 0, 0])
 
     def update(self) -> np.ndarray:
         """
-        state[0] : in_start
-        state[1] : in_warn
-        state[2] : score_changed
-        state[3] : in_special_area
-        state[4] : ball_x
-        state[5] : ball_y
-        state[6] : is_plunger_full
-        state[7] : ball_vel -> abs(now_x - old_x) + abs(now_y - old_y)
-        state[8] : ball_grad -> (now_y - old_y) / (now_x - old_x)
+        state[0] : ball_x
+        state[1] : ball_y
+        state[2] : ball_x_diff
+        state[3] : ball_y_diff
         """
         self.states = [0 for _ in range(self.num_states)]
         
@@ -167,6 +190,16 @@ class Env():
 
         self.x = rwm.ReadProcessMemory(self.proc.handle, self.x_pos_addr)
         self.y = rwm.ReadProcessMemory(self.proc.handle, self.y_pos_addr)
+        self._in_start_point(self.x, self.y)
+        self._in_warn_point(self.x, self.y)
+
+        self.states[0] = self.x / 360.
+        self.states[1] = self.y / 410.
+        self.states[2] = old_x - self.x
+        self.states[3] = old_y - self.y
+        self.score = rwm.ReadProcessMemory(self.proc.handle, self.proc.score_addr)
+        
+        """
         if self._in_start_point(self.x, self.y):
             self.states[0] = 1
         if self._in_warn_point(self.x, self.y):
@@ -211,28 +244,68 @@ class Env():
             dx = (self.x - old_x)
             if dx != 0:
                 self.states[8] = round((self.y - old_y) / dx, 4)
-
+        """
+        ret = imageSearchExByArray(frame, self.plunger_image)
+        if len(ret) > 0:
+            self.plunger_full = True
+        else:
+            self.plunger_full = False
         #-----------------------------------------
         # Check game ended
         self.game_end = False
         for i, dead_img in enumerate(self.dead_images):
             ret = imageSearchExByArray(frame, dead_img)
-            if (i == 0 and len(ret) == 0) or (i != 0 and len(ret) == 1):
+            if len(ret) == 1:
                 self.game_end = True
                 break
+
+        if not self.local_min_check and self.in_warn:
+            self.local_min_check = True
+            self.local_min_time = time.time()
+        else:
+            if not self.in_warn:
+                self.local_min_check = False
+            elif (time.time() - self.local_min_time) > 30:
+                self.game_end = True
+
+
         # ret = imageSearchExByArray(frame, self.dead_images[1])
         # if len(ret) == 1:
         #     self.game_end = True
         # ret = imageSearchExByArray(frame, self.dead_images[1])
         # if len(ret) == 1:
         #     self.game_end = True
+        
         crop_image = get_crop_image(frame_origin)
+        """
+        flipper_area_image, _, areas = get_flipper_area(crop_image)
+        for contour in areas:
+            data = contour.reshape(-1, 2)
+            cx = int(np.mean(data[:, 0] + 126))
+            cy = int(np.mean(data[:, 1] + 344))
+            if cx >= 180.0:
+                self.right_flipper_x = cx / 360.
+                self.right_flipper_y = cy / 410.
+            else:
+                self.left_flipper_x = cx / 360.
+                self.left_flipper_y = cy / 410.
+        self.states[4] = self.left_flipper_x
+        self.states[5] = self.left_flipper_y
+        self.states[6] = self.right_flipper_x
+        self.states[7] = self.right_flipper_y
+        """
         gray_image = get_gray_scale_image(crop_image)
         resize_image = get_resize_image(gray_image)
-        self.states = np.array(resize_image) / 255.0
-        return frame
+
+        self.states = np.array(resize_image)
+        
 
     def reset(self):
+        # Wait 3 Sec
+        sleep(3)
+        # ESC Trigger
+        pag.press('enter')
+        sleep(1)
         # F2 Trigger
         pag.press('f2')
         # Wait 3 sec
@@ -269,7 +342,7 @@ class Env():
         #    self.frame_skip_count = 0
         self.action(act)
 
-        frame = self.update()
+        self.update()
 
         # reward
         reward = 0
@@ -335,8 +408,16 @@ class Env():
         """
 
         # 점수가 같으면 작게 벌줌
-        if old_score == self.score:
-            reward = -1
+        #if old_score == self.score:
+        #    reward = -1
+
+        if self.in_warn:
+            if (self.x != 0 and self.y != 0) and old_x == self.x and old_y == self.y:
+                reward -= 1
+
+        if self.y > 400 and not self.dead_reward:
+            self.dead_reward = True
+            reward = -10
 
         # 점수가 변동되면 변동량의 0.001 배수만큼 보상
         if old_score != self.score and self.y < 390:

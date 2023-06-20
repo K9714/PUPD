@@ -1,6 +1,9 @@
 class FrameProcessor():
     def __init__(self, frame_skip):
         self.frame_skip = frame_skip
+        self.reset()
+
+    def reset(self):
         self.frame_stack = []
         self.next_frame_stack = []
         self.frame_count = 0
